@@ -70,6 +70,20 @@ footer p{max-width:80ch;margin:0}
 .split{grid-template-columns:1fr;gap:30px}
 section{padding:56px 0}
 }
+.join{max-width:560px;margin:0 auto;text-align:left}
+.count{font-family:"Chakra Petch",sans-serif;font-size:clamp(54px,10vw,96px);color:var(--gold);line-height:1;text-align:center}
+.count small{display:block;font-size:16px;font-weight:500;color:var(--silver);margin-top:6px}
+.form{display:flex;gap:10px;margin:26px 0 8px}
+.form input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);color:var(--bone);font:inherit;padding:14px 16px}
+.form input:focus{border-color:var(--gold)}
+.form button{border:0;cursor:pointer;font-size:16px}
+.msg{min-height:1.4em;font-size:15px;color:var(--silver);text-align:center;margin:0 0 18px}
+.pack{list-style:none;margin:0;padding:0 24px;background:var(--panel);border:1px solid var(--line);max-height:420px;overflow-y:auto;text-align:left}
+.pack li{display:grid;grid-template-columns:48px 1fr;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.pack li:last-child{border:0}
+.pack b{font-family:"Chakra Petch",sans-serif;color:var(--gold);font-size:20px}
+.pack li.me{background:linear-gradient(90deg,rgba(201,162,75,.14),transparent);margin:0 -24px;padding-left:24px;padding-right:24px}
+.pack .empty{display:block;color:var(--silver);padding:18px 0}
 </style>
 </head>
 <body>
@@ -128,9 +142,54 @@ section{padding:56px 0}
 <div class="final" id="manada">
 <h2>APEX. <span>Cazad juntos. Ganad juntos.</span></h2>
 <p>Mantener APEX es formar parte de la manada.</p>
-<a class="btn" href="#manada">Únete a la manada</a>
+<div class="join">
+<div class="count"><span id="n">0</span><small>lobos en la manada</small></div>
+<div class="form" id="form"><input id="name" maxlength="24" placeholder="Tu nombre de lobo" aria-label="Tu nombre de lobo" autocomplete="off"><button class="btn" id="go" type="button">Unirme</button></div>
+<p class="msg" id="msg" aria-live="polite"></p>
+<ol class="pack" id="pack"><li><span class="empty">Cargando la manada…</span></li></ol>
+</div>
 </div>
 <footer><p>APEX es una memecoin con fines de comunidad y entretenimiento, sin valor intrínseco ni rentabilidad garantizada. El trading y las criptomonedas conllevan un riesgo alto, incluida la pérdida total del capital. Esto no es asesoramiento financiero. Haz tu propia investigación.</p></footer>
 </div>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var list=$('pack'),cnt=$('n'),msg=$('msg'),form=$('form'),input=$('name'),go=$('go');
+var uid=null,canWrite=false,db=null;
+function say(t){msg.textContent=t}
+function render(docs){
+ cnt.textContent=docs.length;list.textContent='';
+ if(!docs.length){var e=document.createElement('li'),s=document.createElement('span');s.className='empty';s.textContent='Todavía no hay nadie. Sé el primer lobo.';e.appendChild(s);list.appendChild(e);return}
+ docs.forEach(function(d,i){
+  var li=document.createElement('li'),b=document.createElement('b'),n=document.createElement('span');
+  b.textContent='#'+(i+1);n.textContent=String(d.data().name||'Lobo anónimo').slice(0,24);
+  if(uid&&d.id===uid){li.className='me';form.style.display='none';say('Ya estás dentro. Eres el lobo #'+(i+1)+'.')}
+  li.appendChild(b);li.appendChild(n);list.appendChild(li)
+ });
+}
+async function init(){
+ if(!window.claude){form.style.display='none';say('El registro necesita abrir la página desde claude.ai.');return}
+ try{db=await claude.use('db');var user=await claude.use('user')}catch(e){db=null}
+ if(!db){form.style.display='none';say('Inicia sesión para ver y unirte a la manada.');list.textContent='';return}
+ if(user){try{uid=await user.id()}catch(e){}try{canWrite=(await user.can('data.write'))!==false}catch(e){canWrite=true}}else{canWrite=true}
+ if(!canWrite){form.style.display='none';say('Ahora mismo solo pueden apuntarse quienes tienen acceso de colaborador a esta página.')}
+ db.collection('pack').orderBy('at','asc').limit(500).onSnapshot(function(s){render(s.docs)},function(){form.style.display='none';say('No se pudo cargar la manada. Recarga la página.')});
+}
+async function join(){
+ var name=input.value.replace(/\s+/g,' ').trim().slice(0,24);
+ if(name.length<2){say('Escribe un nombre de al menos 2 letras.');return}
+ go.disabled=true;say('Uniéndote…');
+ try{
+  var data={name:name,at:Date.now()};
+  if(uid){await db.collection('pack').doc(uid).set(data)}else{await db.collection('pack').add(data)}
+  input.value='';say('Bienvenido a la manada, '+name+'.');
+ }catch(e){say('No se pudo guardar tu nombre. Es posible que no tengas permiso para escribir aquí.')}
+ go.disabled=false;
+}
+go.addEventListener('click',join);
+input.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();join()}});
+init();
+})();
+</script>
 </body>
 </html>
