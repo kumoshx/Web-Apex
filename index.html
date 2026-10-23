@@ -152,140 +152,39 @@ section{padding:56px 0}
 <footer><p>APEX es una memecoin con fines de comunidad y entretenimiento, sin valor intrínseco ni rentabilidad garantizada. El trading y las criptomonedas conllevan un riesgo alto, incluida la pérdida total del capital. Esto no es asesoramiento financiero. Haz tu propia investigación.</p></footer>
 </div>
 <script>
-(function(){
-var $=function(i){return document.getElementById(i)};
-var list=$('pack'),cnt=$('n'),msg=$('msg'),form=$('form'),input=$('name'),go=$('go');
-var uid=null,canWrite=false,db=null;
-function say(t){msg.textContent=t}
-function render(docs){
- cnt.textContent=docs.length;list.textContent='';
- if(!docs.length){var e=document.createElement('li'),s=document.createElement('span');s.className='empty';s.textContent='Todavía no hay nadie. Sé el primer lobo.';e.appendChild(s);list.appendChild(e);return}
- docs.forEach(function(d,i){
-  var li=document.createElement('li'),b=document.createElement('b'),n=document.createElement('span');
-  b.textContent='#'+(i+1);n.textContent=String(d.data().name||'Lobo anónimo').slice(0,24);
-  if(uid&&d.id===uid){li.className='me';form.style.display='none';say('Ya estás dentro. Eres el lobo #'+(i+1)+'.')}
-  li.appendChild(b);li.appendChild(n);list.appendChild(li)
- });
-}
-async function init(){
- if(!window.claude){form.style.display='none';say('El registro necesita abrir la página desde claude.ai.');return}
- try{db=await claude.use('db');var user=await claude.use('user')}catch(e){db=null}
- if(!db){form.style.display='none';say('Inicia sesión para ver y unirte a la manada.');list.textContent='';return}
- if(user){try{uid=await user.id()}catch(e){}try{canWrite=(await user.can('data.write'))!==false}catch(e){canWrite=true}}else{canWrite=true}
- if(!canWrite){form.style.display='none';say('Ahora mismo solo pueden apuntarse quienes tienen acceso de colaborador a esta página.')}
- db.collection('pack').orderBy('at','asc').limit(500).onSnapshot(function(s){render(s.docs)},function(){form.style.display='none';say('No se pudo cargar la manada. Recarga la página.')});
-}
-async function join(){
- var name=input.value.replace(/\s+/g,' ').trim().slice(0,24);
- if(name.length<2){say('Escribe un nombre de al menos 2 letras.');return}
- go.disabled=true;say('Uniéndote…');
- try{
-  var data={name:name,at:Date.now()};
-  if(uid){await db.collection('pack').doc(uid).set(data)}else{await db.collection('pack').add(data)}
-  input.value='';say('Bienvenido a la manada, '+name+'.');
- }catch(e){say('No se pudo guardar tu nombre. Es posible que no tengas permiso para escribir aquí.')}
- go.disabled=false;
-}
-go.addEventListener('click',join);
-input.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();join()}});
-init();
-})();
-</script>
-<section id="manada">
-  <h2>APEX. Cazad juntos. Ganad juntos.</h2>
-  <p>Mantener APEX es formar parte de la manada.</p>
 
-  <p><strong id="contador-manada">0</strong> lobos en la manada</p>
+(function () {
+  var SUPABASE_URL = "https://qnuqsuowsuiwweabwygc.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_6b7h4lWSHHKWm8TDvCSQPQ_itpfne3m";
 
-  <form id="form-manada">
-    <input id="nombre-manada" type="text" maxlength="24"
-           placeholder="Tu nombre de lobo" autocomplete="off" required>
-    <button type="submit">Unirme</button>
-    <p id="mensaje-manada" role="status"></p>
-  </form>
+  var $ = function (i) { return document.getElementById(i); };
+  var list = $("pack"), cnt = $("n"), msg = $("msg"),
+      form = $("form"), input = $("name"), go = $("go");
 
-  <ol id="lista-manada"><li>Cargando la manada…</li></ol>
-</section>
+  var NAME_RE = /^[A-Za-z0-9_]{3,24}$/;
+  var LS_KEY = "apex_lobo";
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script>
-// ⬇️ Pega aquí los datos de Supabase (Project Settings > API).
-// La clave "anon" es pública por diseño; la protege la seguridad (RLS) del SQL.
-const SUPABASE_URL = "https://qnuqsuowsuiwweabwygc.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_6b7h4lWSHHKWm8TDvCSQPQ_itpfne3m";
+  function say(t, ok) {
+    msg.textContent = t;
+    msg.style.color = ok === true ? "#7ddc8a" : ok === false ? "#ff8a8a" : "";
+  }
+  function getMine() { try { return localStorage.getItem(LS_KEY); } catch (e) { return null; } }
+  function setMine(n) { try { localStorage.setItem(LS_KEY, n); } catch (e) {} }
 
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const form = document.getElementById("form-manada");
-const inputNombre = document.getElementById("nombre-manada");
-const mensaje = document.getElementById("mensaje-manada");
-const contador = document.getElementById("contador-manada");
-const lista = document.getElementById("lista-manada");
-
-const NOMBRE_VALIDO = /^[A-Za-z0-9_]{3,24}$/;
-
-function mostrarMensaje(texto, ok) {
-  mensaje.textContent = texto;
-  mensaje.style.color = ok ? "#7ddc8a" : "#ff8a8a";
-}
-
-async function cargarContador() {
-  const { data, error } = await db.rpc("contar_manada");
-  if (error) return console.error(error);
-  contador.textContent = Number(data).toLocaleString("es-ES");
-}
-
-async function cargarLista() {
-  const { data, error } = await db.rpc("ultimos_lobos", { limite: 10 });
-  if (error) return console.error(error);
-  lista.replaceChildren();
-  if (!data.length) {
-    const li = document.createElement("li");
-    li.textContent = "Sé el primer lobo de la manada";
-    lista.appendChild(li);
+  if (!window.supabase) {
+    form.style.display = "none";
+    say("No se pudo cargar la manada. Recarga la página.", false);
     return;
   }
-  for (const fila of data) {
-    const li = document.createElement("li");
-    li.textContent = fila.nombre; // textContent evita inyección de HTML
-    lista.appendChild(li);
-  }
-}
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const nombre = inputNombre.value.trim();
-
-  if (!NOMBRE_VALIDO.test(nombre)) {
-    return mostrarMensaje("Usa 3-24 caracteres: letras, números o _", false);
+  async function loadCount() {
+    var r = await db.rpc("contar_manada");
+    if (r.error) { console.error(r.error); return; }
+    cnt.textContent = Number(r.data).toLocaleString("es-ES");
   }
 
-  const boton = form.querySelector("button[type=submit]");
-  boton.disabled = true;
-
-  const { error } = await db.from("manada").insert({ nombre });
-
-  boton.disabled = false;
-
-  if (error) {
-    // 23505 = nombre duplicado
-    return mostrarMensaje(
-      error.code === "23505"
-        ? "Ese nombre ya está en la manada. Elige otro."
-        : "No se pudo completar. Inténtalo de nuevo.",
-      false
-    );
-  }
-
-  mostrarMensaje(`¡Bienvenido a la manada, ${nombre}! 🐺`, true);
-  form.reset();
-  cargarContador();
-  cargarLista();
-});
-
-cargarContador();
-cargarLista();
-</script>
+  async function loadList() {
 
 </body>
 </html>
